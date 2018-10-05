@@ -34,7 +34,7 @@ def calibrate():
 
 
 if __name__ == "__main__":
-    file_dir = r'..\pic\Project_Stereo_left\left'
+    file_dir = r'..\pic'
     # 标定所用图像
     pic_name = os.listdir(file_dir)
 
