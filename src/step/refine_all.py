@@ -34,7 +34,7 @@ def refinall_all_param(A, k, W, real_coor, pic_coor):
     error = value(P, real_coor, pic_coor)
     raial_error = [np.sqrt(error[2 * i]**2 + error[2 * i + 1]**2) for i in range(len(error) // 2)]
 
-    print("total avg error:\t", sum(raial_error) / (len(error) // 2))
+    print("total max error:\t", max(raial_error))
 
     #返回拆解后参数，分别为内参矩阵，畸变矫正系数，每幅图对应外参矩阵
     return decompose_paramter_vector(P)
@@ -88,7 +88,7 @@ def get_single_project_coor(A, W, k, coor):
     uv = np.dot(np.dot(A, W), single_coor)
     uv /= uv[-1]
 
-    #畸变矫正
+    #畸变
     u0 = uv[0]
     v0 = uv[1]
     r = np.linalg.norm(coor)
