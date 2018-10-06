@@ -63,6 +63,7 @@ def value(H, pic_coor, real_coor):
         Y = np.append(Y, U[:2])
 
     Y_NEW = (pic_coor.reshape(-1) - Y)
+
     return Y_NEW
 
 
@@ -102,6 +103,7 @@ def refine_H(pic_coor, real_coor, initial_H):
 def get_homography(pic_coor, real_coor):
     refined_homographies =[]
 
+    error = []
     for i in range(len(pic_coor)):
         initial_H = get_initial_H(pic_coor[i], real_coor[i])
         final_H = refine_H(pic_coor[i], real_coor[i], initial_H)

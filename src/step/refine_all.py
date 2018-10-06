@@ -5,7 +5,6 @@ import numpy as np
 import math
 from scipy import optimize as opt
 
-
 #微调所有参数
 def refinall_all_param(A, k, W, real_coor, pic_coor):
     #整合参数
@@ -27,14 +26,14 @@ def refinall_all_param(A, k, W, real_coor, pic_coor):
     #微调所有参数
     P = opt.leastsq(value,
                     P_init,
-                    args=(real_coor, pic_coor),
+                    args=(W, real_coor, pic_coor),
                     Dfun=jacobian)[0]
 
     #raial_error表示利用标定后的参数计算得到的图像坐标与真实图像坐标点的平均像素距离
-    error = value(P, real_coor, pic_coor)
+    error = value(P, W, real_coor, pic_coor)
     raial_error = [np.sqrt(error[2 * i]**2 + error[2 * i + 1]**2) for i in range(len(error) // 2)]
 
-    print("total max error:\t", max(raial_error))
+    print("total max error:\t", np.max(raial_error))
 
     #返回拆解后参数，分别为内参矩阵，畸变矫正系数，每幅图对应外参矩阵
     return decompose_paramter_vector(P)
@@ -85,24 +84,51 @@ def decompose_paramter_vector(P):
 def get_single_project_coor(A, W, k, coor):
     single_coor = np.array([coor[0], coor[1], coor[2], 1])
 
+    #'''
+    coor_norm = np.dot(W, single_coor)
+    coor_norm /= coor_norm[-1]
+
+    #r = np.linalg.norm(coor)
+    r = np.linalg.norm(coor_norm)
+
     uv = np.dot(np.dot(A, W), single_coor)
     uv /= uv[-1]
 
     #畸变
     u0 = uv[0]
     v0 = uv[1]
-    r = np.linalg.norm(coor)
+
     uc = A[0, 2]
     vc = A[1, 2]
 
-    u = u0 - (u0 - uc) * r**2 * k[0] - (u0 - uc) * r**4 * k[1]
-    v = v0 - (v0 - vc) * r**2 * k[0] - (v0 - vc) * r**4 * k[1]
+    #u = (uc * r**2 * k[0] + uc * r**4 * k[1] - u0) / (r**2 * k[0] + r**4 * k[1] - 1)
+    #v = (vc * r**2 * k[0] + vc * r**4 * k[1] - v0) / (r**2 * k[0] + r**4 * k[1] - 1)
+    u = u0 + (u0 - uc) * r**2 * k[0] + (u0 - uc) * r**4 * k[1]
+    v = v0 + (v0 - vc) * r**2 * k[0] + (v0 - vc) * r**4 * k[1]
+    '''
+    uv = np.dot(W, single_coor)
+    uv /= uv[-1]
+    # 透镜矫正
+    x0 = uv[0]
+    y0 = uv[1]
+    r = np.linalg.norm(np.array([x0, y0]))
+
+    k0 = 0
+    k1 = 0
+
+    x = x0 * (1 + r ** 2 * k0 + r ** 4 * k1)
+    y = y0 * (1 + r ** 2 * k0 + r ** 4 * k1)
+
+    #u = A[0, 0] * x + A[0, 2]
+    #v = A[1, 1] * y + A[1, 2]
+    [u, v, _] = np.dot(A, np.array([x, y, 1]))
+    '''
 
     return np.array([u, v])
 
 
 #返回所有点的真实世界坐标映射到的图像坐标与真实图像坐标的残差
-def value(P, X, Y_real):
+def value(P, org_W, X, Y_real):
     M = (len(P) - 7) // 6
     N = len(X[0])
     A = np.array([
@@ -117,10 +143,14 @@ def value(P, X, Y_real):
 
         #取出当前图像对应的外参
         w = P[m:m + 6]
+
+        # 不用旋转矩阵的变换是因为会有精度损失
+        '''
         R = to_rotation_matrix(w[:3])
         t = w[3:].reshape(3, 1)
         W = np.concatenate((R, t), axis=1)
-
+        '''
+        W = org_W[i]
         #计算每幅图的坐标残差
         for j in range(N):
             Y = np.append(Y, get_single_project_coor(A, W, np.array([P[5], P[6]]), (X[i])[j]))
@@ -131,7 +161,7 @@ def value(P, X, Y_real):
 
 
 #计算对应jacobian矩阵
-def jacobian(P, X, Y_real):
+def jacobian(P, WW, X, Y_real):
     M = (len(P) - 7) // 6
     N = len(X[0])
     K = len(P)
@@ -162,7 +192,7 @@ def jacobian(P, X, Y_real):
     return J.T
 
 
-#将旋转矩阵分解为一个向量并返回，Rodrigues旋转向量与矩阵的变换
+#将旋转矩阵分解为一个向量并返回，Rodrigues旋转向量与矩阵的变换,最后计算坐标时并未用到，因为会有精度损失
 def to_rodrigues_vector(R):
     p = 0.5 * np.array([[R[2, 1] - R[1, 2]],
                         [R[0, 2] - R[2, 0]],
